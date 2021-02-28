@@ -1,4 +1,5 @@
-#!/usr/bin/python
+#!/usr/local/bin/python3
+
 from argparse import ArgumentParser
 from json import loads
 from os import system, environ
@@ -6,6 +7,8 @@ from subprocess import PIPE, Popen
 from traceback import print_exc
 from urllib.parse import quote
 from urllib3 import PoolManager
+import spotipy
+from spotipy.oauth2 import SpotifyClientCredentials
 
 from bs4 import BeautifulSoup
 
@@ -25,8 +28,7 @@ OK      = GREEN + "[+] " + DEFAULT
 #=======================
 #   Spotify application
 #=======================
-CLIENT_ID = '' if environ['CLIENT_ID'] is None else environ['CLIENT_ID']
-CALL_BACK_URL = '' if environ['CALL_BACK_URL'] is None else environ['CALL_BACK_URL']
+spotify = spotipy.Spotify(SpotifyClientCredentials())
 
 #=======================
 #   Other constants
@@ -57,46 +59,12 @@ def get_data_from_process(process: str):
     tmp = download_data(process)
     return loads(tmp)
 
-def get_track_name_process(track_id: str, access_token: str):
-    """Gets the track name process based on the track id and the access token"""
-    process = 'curl -sS -X GET "https://api.spotify.com/v1/tracks/'
-    process += f'{track_id}?market=ES" -H "Authorization: Bearer '
-    process += f'{access_token}"'
-    return process
-
-def get_track_name(track_id: str, access_token: str):
-    """ get the spotify track name from id """
+def get_track_name(track_id: str):
+    """Gets the track name using its track id"""
     print(f'{ACTION} getting track name')
-    process = get_track_name_process(track_id, access_token)
-    data = get_data_from_process(process)
-    if 'error' in data:
-        error_msg = data['error']['message']
-        print(f"{ERROR} can't found song name")
-        print(f'{ERROR} {error_msg}')
-        return None
-    name = data['name']
+    name = spotify.track(track_id)['name']
     print(f'{OK} name is {name}')
     return name
-
-def generate_url():
-    """Generate url for getting access token"""
-    print(f'{ACTION} generating url for access token')
-    url = f'https://accounts.spotify.com/authorize?client_id={CLIENT_ID}'
-    url += f'&response_type=token&redirect_uri={CALL_BACK_URL}'
-    print(f'{OK} {url}')
-
-def get_access_token_process():
-    """Gets the process to get the access token"""
-    process = 'curl -sS -X GET "https://accounts.spotify.com/authorize?client_id='
-    process += f'{CLIENT_ID}&response_type=token&redirect_uri={CALL_BACK_URL}'
-    process += '" -H "Accept: application/json"'
-    return process
-
-def get_access_token():
-    """Get access token"""
-    print(f'{ACTION} getting access token')
-    process = get_access_token_process()
-    print(get_data_from_process(process))
 
 def download_youtube(link: str):
     """Downloading the track"""
@@ -114,15 +82,12 @@ def main(args):
     """Main process"""
     try:
         header()
-        if args.gen_url:
-            generate_url()
+        if args.track:
+            name = get_track_name(args.track[0])
+            link = search_youtube(name)
+            download_youtube(link)
         else:
-            if args.dl and args.access_token and args.dl[0] == 'youtube' and args.track:
-                name = get_track_name(args.track[0], args.access_token[0])
-                link = search_youtube(name)
-                download_youtube(link)
-            else:
-                print(ERROR + "use --help for help")
+            print(ERROR + "use --help for help")
     except Exception as err:
         print(ERROR + "An HTTP error occurred\n")
         print(type(err))
@@ -132,14 +97,7 @@ def main(args):
 if __name__ == "__main__":
     parser = ArgumentParser(description='spotify-dl allows you to download your spotify songs')
     parser.add_argument('--verbose', action='store_true', help='verbose flag' )
-    parser.add_argument('--dl', nargs=1, help="set the download methode")
-    parser.add_argument('--user', nargs=1, help="set the spotify login")
-    parser.add_argument('--password', nargs=1, help="set the spotify password")
     parser.add_argument('--traceback', action='store_true', help="enable traceback")
-    parser.add_argument(
-            '--gen_url', action='store_true', help="generate url for getting access_token")
     parser.add_argument('--track', nargs=1, help="spotify track id")
-    parser.add_argument('--access_token', nargs=1, help="set the access_token")
-    parser.add_argument('-m', nargs=1, help="set a methode")
 
     main(parser.parse_args())
