@@ -2,6 +2,7 @@
 
 from argparse import ArgumentParser
 from json import loads
+from os import system
 from subprocess import PIPE, Popen
 from traceback import print_exc
 from urllib.parse import quote
@@ -33,6 +34,10 @@ CALL_BACK_URL=""
 #=======================
 http = PoolManager()
 
+#=======================
+#   Actual code
+#=======================
+
 def search_youtube(track_name: str):
     """Search in youtube using the track_name as query"""
     text_to_search = track_name
@@ -43,26 +48,27 @@ def search_youtube(track_name: str):
     first_link = soup.findAll(attrs={'class': 'yt-uix-tile-link'})[0]['href']
     return f'https://youtube.com{first_link}'
 
-def downlaod_data(process: str):
+def download_data(process: str):
     """Downloads the data from a process and stores it in a tmp file"""
     proc = Popen(process, shell=True, stdout=PIPE)
     return proc.stdout.read()
 
 def get_data_from_process(process: str):
     """Gets data downloaded from a process"""
-    tmp = downlaod_data(process)
+    tmp = download_data(process)
     return loads(tmp)
 
-def get_track_name_process(id: str, access_token: str):
+def get_track_name_process(track_id: str, access_token: str):
+    """Gets the track name process based on the track id and the access token"""
     process = 'curl -sS -X GET "https://api.spotify.com/v1/tracks/'
-    process += f'{id}?market=ES" -H "Authorization: Bearer '
-    process += '{access_token}"'
+    process += f'{track_id}?market=ES" -H "Authorization: Bearer '
+    process += f'{access_token}"'
     return process
 
-def get_track_name(id: str, access_token: str):
+def get_track_name(track_id: str, access_token: str):
     """ get the spotify track name from id """
     print(f'{ACTION} getting track name')
-    process = get_track_name_process(id, access_token)
+    process = get_track_name_process(track_id, access_token)
     data = get_data_from_process(process)
     if 'error' in data:
         error_msg = data['error']['message']
@@ -81,9 +87,10 @@ def generate_url():
     print(f'{OK} {url}')
 
 def get_access_token_process():
+    """Gets the process to get the access token"""
     process = 'curl -sS -X GET "https://accounts.spotify.com/authorize?client_id='
     process += f'{CLIENT_ID}&response_type=token&redirect_uri={CALL_BACK_URL}'
-    process += f'" -H "Accept: application/json"'
+    process += '" -H "Accept: application/json"'
     return process
 
 def get_access_token():
@@ -95,9 +102,7 @@ def get_access_token():
 def download_youtube(link: str):
     """Downloading the track"""
     print(f'{ACTION} downloading song...')
-    process = f'youtube-dl --extract-audio --audio-format mp3 {link}'
-    downlaod_data(process)
-    print(OK + "Song Downloaded")
+    system(f'add_music {link}')
 
 def header():
     """ header informations """
@@ -106,24 +111,10 @@ def header():
     print(BLUE + "@ Designed for OSx/linux")
     print("" + DEFAULT)
 
-if __name__ == "__main__":
-    parser = ArgumentParser(description='spotify-dl allows you to download your spotify songs')
-    parser.add_argument('--verbose',
-              action='store_true',
-              help='verbose flag' )
-    parser.add_argument('--dl', nargs=1, help="set the download methode")
-    parser.add_argument('--user', nargs=1, help="set the spotify login")
-    parser.add_argument('--password', nargs=1, help="set the spotify password")
-    parser.add_argument('--traceback', action='store_true', help="enable traceback")
-    parser.add_argument('--gen_url', action='store_true', help="generate url for getting access_token")
-    parser.add_argument('--track', nargs=1, help="spotify track id")
-    parser.add_argument('--access_token', nargs=1, help="set the access_token")
-    parser.add_argument('-m', nargs=1, help="set a methode")
-
-    args = parser.parse_args()
-
+def main(args):
+    """Main process"""
     try:
-        header();
+        header()
         if args.gen_url:
             generate_url()
         else:
@@ -138,3 +129,18 @@ if __name__ == "__main__":
         print(type(err))
         if args.traceback:
             print_exc()
+
+if __name__ == "__main__":
+    parser = ArgumentParser(description='spotify-dl allows you to download your spotify songs')
+    parser.add_argument('--verbose', action='store_true', help='verbose flag' )
+    parser.add_argument('--dl', nargs=1, help="set the download methode")
+    parser.add_argument('--user', nargs=1, help="set the spotify login")
+    parser.add_argument('--password', nargs=1, help="set the spotify password")
+    parser.add_argument('--traceback', action='store_true', help="enable traceback")
+    parser.add_argument(
+            '--gen_url', action='store_true', help="generate url for getting access_token")
+    parser.add_argument('--track', nargs=1, help="spotify track id")
+    parser.add_argument('--access_token', nargs=1, help="set the access_token")
+    parser.add_argument('-m', nargs=1, help="set a methode")
+
+    main(parser.parse_args())
