@@ -37,7 +37,7 @@ def searchYoutube(trackname):
 
 def getTrackName(id, access_token):
     """ get the spotify track name from id """
-    print ACTION + " getting track name"
+    print(ACTION + " getting track name")
     proc = subprocess.Popen('curl -sS -X GET "https://api.spotify.com/v1/tracks/'+ id +'?market=ES" -H "Authorization: Bearer '+ access_token +'"', shell=True, stdout=subprocess.PIPE)
     tmp = proc.stdout.read()
     #convert from json to string
@@ -45,40 +45,40 @@ def getTrackName(id, access_token):
     #json.dump(tmp, io)
     data = json.loads(tmp)
     if 'error' in data:
-        print ERROR + "can't found song name"
-        print ERROR + data['error']['message']
+        print(ERROR + "can't found song name")
+        print(ERROR + data['error']['message'])
         return None
     else:
-        print OK + "name is " + data["name"]
+        print(OK + "name is " + data["name"])
         return data["name"]
 
 def genUrl():
     """ gen url for getting access token """
-    print ACTION + " generating url for access token"
-    print OK +  "https://accounts.spotify.com/authorize?client_id="+ CLIENT_ID + "&response_type=token&redirect_uri=" + CALL_BACK_URL
+    print(ACTION + " generating url for access token")
+    print(OK +  "https://accounts.spotify.com/authorize?client_id="+ CLIENT_ID + "&response_type=token&redirect_uri=" + CALL_BACK_URL)
 
 def getAccessToken():
     """ get access token """
-    print ACTION + " getting access token"
+    print(ACTION + " getting access token")
     proc = subprocess.Popen('curl -sS -X GET "https://accounts.spotify.com/authorize?client_id='+ CLIENT_ID +'&response_type=token&redirect_uri='+ CALL_BACK_URL +'" -H "Accept: application/json"', shell=True, stdout=subprocess.PIPE)
     tmp = proc.stdout.read()
     data = json.loads(tmp)
 
-    print data
+    print(data)
 
 def downloadYoutube(link):
     """ downloading the track """
-    print ACTION + "downloading song .."
+    print(ACTION + "downloading song ..")
     proc = subprocess.Popen('youtube-dl --extract-audio --audio-format mp3 '+ link, shell=True, stdout=subprocess.PIPE)
     tmp = proc.stdout.read()
-    print OK + "Song Downloaded"
+    print(OK + "Song Downloaded")
 
 def header():
     """ header informations """
-    print RED + "@ spotify-dl.py version 0.0.1"
-    print YELLOW + "@ author : Naper"
-    print BLUE + "@ Designed for OSx/linux"
-    print "" + DEFAULT
+    print(RED + "@ spotify-dl.py version 0.0.1")
+    print(YELLOW + "@ author : Naper")
+    print(BLUE + "@ Designed for OSx/linux")
+    print("" + DEFAULT)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='spotify-dl allows you to download your spotify songs')
@@ -106,8 +106,8 @@ if __name__ == "__main__":
                 link = searchYoutube(name)
                 downloadYoutube(link)
             else:
-                print ERROR + "use --help for help"
+                print(ERROR + "use --help for help")
     except Exception, err:
-        print ERROR + "An HTTP error occurred\n"
+        print(ERROR + "An HTTP error occurred\n")
         if args.traceback:
             traceback.print_exc()
