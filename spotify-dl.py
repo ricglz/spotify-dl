@@ -1,14 +1,17 @@
 #!/usr/bin/python
 
-import urllib
-import urllib2
-from bs4 import BeautifulSoup
-import argparse
-import json
-from StringIO import StringIO
-import subprocess
-import traceback
+from argparse import ArgumentParser
+from json import loads
+from subprocess import PIPE, Popen
+from traceback import print_exc
+from urllib.parse import quote
+from urllib3 import PoolManager
 
+from bs4 import BeautifulSoup
+
+#=======================
+#   Terminal Colors
+#=======================
 RED     = "\033[31m"
 GREEN   = "\033[32m"
 BLUE    = "\033[34m"
@@ -25,52 +28,75 @@ OK      =  GREEN + "[+] " + DEFAULT
 CLIENT_ID=""
 CALL_BACK_URL=""
 
-def searchYoutube(trackname):
-    textToSearch = trackname
-    query = urllib.quote(textToSearch)
-    url = "https://www.youtube.com/results?search_query=" + query
-    response = urllib2.urlopen(url)
-    html = response.read()
-    soup = BeautifulSoup(html, "html.parser")
-    #we return the first result
-    return "https://youtube.com" + soup.findAll(attrs={'class':'yt-uix-tile-link'})[0]['href']
+#=======================
+#   Other constants
+#=======================
+http = PoolManager()
 
-def getTrackName(id, access_token):
+def search_youtube(track_name: str):
+    """Search in youtube using the track_name as query"""
+    text_to_search = track_name
+    query = quote(text_to_search)
+    url = f'https://www.youtube.com/results?search_query={query}'
+    response = http.request('GET', url)
+    soup = BeautifulSoup(response.data, 'html.parser')
+    first_link = soup.findAll(attrs={'class': 'yt-uix-tile-link'})[0]['href']
+    return f'https://youtube.com{first_link}'
+
+def downlaod_data(process: str):
+    """Downloads the data from a process and stores it in a tmp file"""
+    proc = Popen(process, shell=True, stdout=PIPE)
+    return proc.stdout.read()
+
+def get_data_from_process(process: str):
+    """Gets data downloaded from a process"""
+    tmp = downlaod_data(process)
+    return loads(tmp)
+
+def get_track_name_process(id: str, access_token: str):
+    process = 'curl -sS -X GET "https://api.spotify.com/v1/tracks/'
+    process += f'{id}?market=ES" -H "Authorization: Bearer '
+    process += '{access_token}"'
+    return process
+
+def get_track_name(id: str, access_token: str):
     """ get the spotify track name from id """
-    print(ACTION + " getting track name")
-    proc = subprocess.Popen('curl -sS -X GET "https://api.spotify.com/v1/tracks/'+ id +'?market=ES" -H "Authorization: Bearer '+ access_token +'"', shell=True, stdout=subprocess.PIPE)
-    tmp = proc.stdout.read()
-    #convert from json to string
-    #io = StringIO()
-    #json.dump(tmp, io)
-    data = json.loads(tmp)
+    print(f'{ACTION} getting track name')
+    process = get_track_name_process(id, access_token)
+    data = get_data_from_process(process)
     if 'error' in data:
-        print(ERROR + "can't found song name")
-        print(ERROR + data['error']['message'])
+        error_msg = data['error']['message']
+        print(f"{ERROR} can't found song name")
+        print(f'{ERROR} {error_msg}')
         return None
-    else:
-        print(OK + "name is " + data["name"])
-        return data["name"]
+    name = data['name']
+    print(f'{OK} name is {name}')
+    return name
 
-def genUrl():
-    """ gen url for getting access token """
-    print(ACTION + " generating url for access token")
-    print(OK +  "https://accounts.spotify.com/authorize?client_id="+ CLIENT_ID + "&response_type=token&redirect_uri=" + CALL_BACK_URL)
+def generate_url():
+    """Generate url for getting access token"""
+    print(f'{ACTION} generating url for access token')
+    url = f'https://accounts.spotify.com/authorize?client_id={CLIENT_ID}'
+    url += f'&response_type=token&redirect_uri={CALL_BACK_URL}'
+    print(f'{OK} {url}')
 
-def getAccessToken():
-    """ get access token """
-    print(ACTION + " getting access token")
-    proc = subprocess.Popen('curl -sS -X GET "https://accounts.spotify.com/authorize?client_id='+ CLIENT_ID +'&response_type=token&redirect_uri='+ CALL_BACK_URL +'" -H "Accept: application/json"', shell=True, stdout=subprocess.PIPE)
-    tmp = proc.stdout.read()
-    data = json.loads(tmp)
+def get_access_token_process():
+    process = 'curl -sS -X GET "https://accounts.spotify.com/authorize?client_id='
+    process += f'{CLIENT_ID}&response_type=token&redirect_uri={CALL_BACK_URL}'
+    process += f'" -H "Accept: application/json"'
+    return process
 
-    print(data)
+def get_access_token():
+    """Get access token"""
+    print(f'{ACTION} getting access token')
+    process = get_access_token_process()
+    print(get_data_from_process(process))
 
-def downloadYoutube(link):
-    """ downloading the track """
-    print(ACTION + "downloading song ..")
-    proc = subprocess.Popen('youtube-dl --extract-audio --audio-format mp3 '+ link, shell=True, stdout=subprocess.PIPE)
-    tmp = proc.stdout.read()
+def download_youtube(link: str):
+    """Downloading the track"""
+    print(f'{ACTION} downloading song...')
+    process = f'youtube-dl --extract-audio --audio-format mp3 {link}'
+    downlaod_data(process)
     print(OK + "Song Downloaded")
 
 def header():
@@ -81,7 +107,7 @@ def header():
     print("" + DEFAULT)
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description='spotify-dl allows you to download your spotify songs')
+    parser = ArgumentParser(description='spotify-dl allows you to download your spotify songs')
     parser.add_argument('--verbose',
               action='store_true',
               help='verbose flag' )
@@ -99,15 +125,16 @@ if __name__ == "__main__":
     try:
         header();
         if args.gen_url:
-            genUrl()
+            generate_url()
         else:
             if args.dl and args.access_token and args.dl[0] == 'youtube' and args.track:
-                name = getTrackName(args.track[0], args.access_token[0])
-                link = searchYoutube(name)
-                downloadYoutube(link)
+                name = get_track_name(args.track[0], args.access_token[0])
+                link = search_youtube(name)
+                download_youtube(link)
             else:
                 print(ERROR + "use --help for help")
-    except Exception, err:
+    except Exception as err:
         print(ERROR + "An HTTP error occurred\n")
+        print(type(err))
         if args.traceback:
-            traceback.print_exc()
+            print_exc()
