@@ -1,8 +1,7 @@
 #!/usr/bin/python
-
 from argparse import ArgumentParser
 from json import loads
-from os import system
+from os import system, environ
 from subprocess import PIPE, Popen
 from traceback import print_exc
 from urllib.parse import quote
@@ -21,13 +20,13 @@ DEFAULT = "\033[0m"
 
 ACTION  = BLUE + "[+] " + DEFAULT
 ERROR   = RED + "[+] " + DEFAULT
-OK      =  GREEN + "[+] " + DEFAULT
+OK      = GREEN + "[+] " + DEFAULT
 
 #=======================
 #   Spotify application
 #=======================
-CLIENT_ID=""
-CALL_BACK_URL=""
+CLIENT_ID = '' if environ['CLIENT_ID'] is None else environ['CLIENT_ID']
+CALL_BACK_URL = '' if environ['CALL_BACK_URL'] is None else environ['CALL_BACK_URL']
 
 #=======================
 #   Other constants
@@ -105,7 +104,7 @@ def download_youtube(link: str):
     system(f'add_music {link}')
 
 def header():
-    """ header informations """
+    """Header information"""
     print(RED + "@ spotify-dl.py version 0.0.1")
     print(YELLOW + "@ author : Naper")
     print(BLUE + "@ Designed for OSx/linux")
