@@ -6,12 +6,13 @@ Downloads music from spotify using youtube as an intermidiate
 #!/usr/local/bin/python3
 
 from argparse import ArgumentParser
-from os import system
+from os import environ, system
 from typing import Tuple
 from traceback import print_exc
 from urllib3 import PoolManager
 
 from bs4 import BeautifulSoup
+from googleapiclient.discovery import build
 from spotipy.oauth2 import SpotifyClientCredentials
 import spotipy
 
@@ -34,10 +35,17 @@ OK      = GREEN + "[+] " + DEFAULT
 spotify = spotipy.Spotify(client_credentials_manager=SpotifyClientCredentials())
 
 #=======================
+#   Spotify application
+#=======================
+YT_DEVELOPER_KEY = environ.get('YT_DEVELOPER_KEY', '')
+youtube = build('youtube', 'v3', developerKey=YT_DEVELOPER_KEY).search()
+
+#=======================
 #   Other constants
 #=======================
 http = PoolManager()
 TrackInfo = Tuple[str, str, str]
+DO_SCRAP = False
 
 #=======================
 #   Actual code
@@ -48,14 +56,33 @@ def write_to_file(response):
     txt_file.write(response)
     txt_file.close()
 
-def get_youtube_link(track_info: TrackInfo):
-    """Search in youtube using the track_name as query"""
-    fields = {'search_query': ' '.join(track_info)}
+def scrap_youtube_link(query: str):
+    """Scrap youtube content to search for the first link"""
+    fields = {'search_query': query}
     url = 'https://www.youtube.com/results'
     response = http.request('GET', url, fields=fields).data
     soup = BeautifulSoup(response, 'html.parser')
     first_link = soup.find('a', attrs={'class':'yt-thumbnail'})['href']
     return f'https://youtube.com{first_link}'
+
+def search_youtube_link(query: str):
+    """Search for the id using google api and return the link"""
+    results = youtube.list(q=query, part='id,snippet', maxResults=5).execute()
+    for result in results.get('items', []):
+        id_object = result['id']
+        if id_object['kind'] == 'youtube#video':
+            actual_id = id_object['videoId']
+            return f'https://youtube.com/watch?v={actual_id}'
+    return ''
+
+def get_youtube_link(track_info: TrackInfo):
+    """
+    Gets the youtube link either by scrapping the results site
+    or by using the google api
+    """
+    query = ' '.join(track_info)
+    return scrap_youtube_link(query) if DO_SCRAP else \
+            search_youtube_link(query)
 
 def get_track_info(track) -> TrackInfo:
     """Gets the track name using its track id"""
