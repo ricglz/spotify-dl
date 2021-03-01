@@ -53,7 +53,6 @@ def get_youtube_link(track_info: TrackInfo):
     fields = {'search_query': ' '.join(track_info)}
     url = 'https://www.youtube.com/results'
     response = http.request('GET', url, fields=fields).data
-    write_to_file(response.decode('utf-8'))
     soup = BeautifulSoup(response, 'html.parser')
     first_link = soup.find('a', attrs={'class':'yt-thumbnail'})['href']
     return f'https://youtube.com{first_link}'
@@ -61,7 +60,6 @@ def get_youtube_link(track_info: TrackInfo):
 def get_track_info(track) -> TrackInfo:
     """Gets the track name using its track id"""
     artist_name = track['artists'][0]['name']
-    # album_name = track['album']['name']
     track_name = track['name']
     return track_name, artist_name
 
