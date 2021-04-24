@@ -6,14 +6,20 @@ Downloads music from spotify using youtube as an intermidiate
 #!/usr/local/bin/python3
 
 from argparse import ArgumentParser
-from os import environ, system
-from typing import Tuple
+from os import environ
+from subprocess import run, Popen, call
 from traceback import print_exc
-from urllib3 import PoolManager
+from typing import Tuple
+from urllib.parse import urlencode
 
 from bs4 import BeautifulSoup
+from selenium import webdriver
+from webdriver_manager.firefox import GeckoDriverManager
+
 from googleapiclient.discovery import build
+
 from spotipy.oauth2 import SpotifyClientCredentials
+from tqdm import tqdm
 import spotipy
 
 #=======================
@@ -33,19 +39,26 @@ OK      = GREEN + "[+] " + DEFAULT
 #   Spotify application
 #=======================
 spotify = spotipy.Spotify(client_credentials_manager=SpotifyClientCredentials())
+USER_ID = environ.get('SPOTIFY_USER_ID', '123456789')
 
 #=======================
 #   Spotify application
 #=======================
 YT_DEVELOPER_KEY = environ.get('YT_DEVELOPER_KEY', '')
 youtube = build('youtube', 'v3', developerKey=YT_DEVELOPER_KEY).search()
+options = webdriver.FirefoxOptions()
+options.headless = True
+
+try:
+    driver = webdriver.Firefox(options=options)
+except Exception:
+    driver = webdriver.Firefox(GeckoDriverManager().install(), options=options)
 
 #=======================
 #   Other constants
 #=======================
-http = PoolManager()
 TrackInfo = Tuple[str, str, str]
-DO_SCRAP = False
+DO_SCRAP = True
 
 #=======================
 #   Actual code
@@ -53,16 +66,17 @@ DO_SCRAP = False
 def write_to_file(response):
     """ONLY FOR DEBUGGING: Creates an html file with the response"""
     txt_file = open('test.html', 'w')
-    txt_file.write(response)
+    txt_file.write(response.decode('utf-8'))
     txt_file.close()
 
 def scrap_youtube_link(query: str):
     """Scrap youtube content to search for the first link"""
-    fields = {'search_query': query}
-    url = 'https://www.youtube.com/results'
-    response = http.request('GET', url, fields=fields).data
-    soup = BeautifulSoup(response, 'html.parser')
-    first_link = soup.find('a', attrs={'class':'yt-thumbnail'})['href']
+    fields = urlencode({'search_query': query})
+    url = f'https://www.youtube.com/results?{fields}'
+    driver.get(url)
+    content = driver.page_source.encode('utf-8').strip()
+    soup = BeautifulSoup(content, 'html.parser')
+    first_link = soup.find('a', id='thumbnail')['href']
     return f'https://youtube.com{first_link}'
 
 def search_youtube_link(query: str):
@@ -92,27 +106,40 @@ def get_track_info(track) -> TrackInfo:
 
 def get_playlist_tracks(playlist_id: str):
     """Get tracks that are in a spotify playlist"""
-    items = spotify.playlist(playlist_id)['tracks']['items']
-    get_track_from_item = lambda item: item['track']
-    return list(map(get_track_from_item, items))
+    items = spotify.user_playlist_tracks(USER_ID, playlist_id)['items']
+    offset = 100
+    total_items = []
+    while len(items) == 100:
+        print('Getting 100 tracks more')
+        total_items += items
+        items = spotify.user_playlist_tracks(user_id, playlist_id, offset=offset)['items']
+        offset += 100
+    total_items += items
+    tracks = [item['track'] for item in tqdm(total_items, 'Getting playlist tracks')]
+    return tracks
 
 def download_youtube(links: [str]):
     """Downloading the track"""
     print(f'{ACTION} downloading song...')
-    system(f'add_music {" ".join(links)}')
+    call(['add_music'] + links)
+
+def get_tracks(args):
+    if args.track:
+        return [spotify.track(args.track[0])]
+    if args.playlist:
+        return get_playlist_tracks(args.playlist[0])
+    return None
 
 def main(args):
     """Main process"""
     try:
-        tracks = [spotify.track(args.track[0])] if args.track else \
-                 get_playlist_tracks(args.playlist[0]) if args.playlist else None
+        tracks = get_tracks(args)
         if tracks is None:
             print(f'{ERROR} use --help for help')
             return
-        track_infos = list(map(get_track_info, tracks))
-        links = list(map(get_youtube_link, track_infos))
-        print(links[0])
-        # download_youtube(links)
+        track_infos = [get_track_info(track) for track in tqdm(tracks)]
+        links = [get_youtube_link(info) for info in tqdm(track_infos, 'Getting youtube links')]
+        download_youtube(links)
     except spotipy.SpotifyException as err:
         print(f'{ERROR} {err}')
         if args.traceback:
