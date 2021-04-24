@@ -157,7 +157,6 @@ def get_links(tracks: list):
         try:
             link = get_stored_link(track, storage)
         except KeyError:
-            tqdm.write('Link no found')
             link = get_youtube_link(track)
             store_link(track, link, storage)
         links.append(link)
