@@ -13,14 +13,15 @@ from typing import Tuple
 from urllib.parse import urlencode
 
 from bs4 import BeautifulSoup
-from selenium import webdriver
-from webdriver_manager.firefox import GeckoDriverManager
-
 from googleapiclient.discovery import build
-
+from selenium import webdriver
 from spotipy.oauth2 import SpotifyClientCredentials
 from tqdm import tqdm
+from webdriver_manager.firefox import GeckoDriverManager
 import spotipy
+
+from song_model import SongModel
+from storage import Storage
 
 #=======================
 #   Terminal Colors
@@ -69,40 +70,12 @@ def write_to_file(response):
     txt_file.write(response.decode('utf-8'))
     txt_file.close()
 
-def scrap_youtube_link(query: str):
-    """Scrap youtube content to search for the first link"""
-    fields = urlencode({'search_query': query})
-    url = f'https://www.youtube.com/results?{fields}'
-    driver.get(url)
-    content = driver.page_source.encode('utf-8').strip()
-    soup = BeautifulSoup(content, 'html.parser')
-    first_link = soup.find('a', id='thumbnail')['href']
-    return f'https://youtube.com{first_link}'
-
-def search_youtube_link(query: str):
-    """Search for the id using google api and return the link"""
-    results = youtube.list(q=query, part='id,snippet', maxResults=5).execute()
-    for result in results.get('items', []):
-        id_object = result['id']
-        if id_object['kind'] == 'youtube#video':
-            actual_id = id_object['videoId']
-            return f'https://youtube.com/watch?v={actual_id}'
-    return ''
-
-def get_youtube_link(track_info: TrackInfo):
-    """
-    Gets the youtube link either by scrapping the results site
-    or by using the google api
-    """
-    query = ' '.join(track_info)
-    return scrap_youtube_link(query) if DO_SCRAP else \
-            search_youtube_link(query)
-
-def get_track_info(track) -> TrackInfo:
-    """Gets the track name using its track id"""
-    artist_name = track['artists'][0]['name']
-    track_name = track['name']
-    return track_name, artist_name
+def get_tracks(args):
+    if args.track:
+        return [spotify.track(args.track[0])]
+    if args.playlist:
+        return get_playlist_tracks(args.playlist[0])
+    return None
 
 def get_playlist_tracks(playlist_id: str):
     """Get tracks that are in a spotify playlist"""
@@ -123,12 +96,72 @@ def download_youtube(links: [str]):
     print(f'{ACTION} downloading song...')
     call(['add_music'] + links)
 
-def get_tracks(args):
-    if args.track:
-        return [spotify.track(args.track[0])]
-    if args.playlist:
-        return get_playlist_tracks(args.playlist[0])
-    return None
+def scrap_youtube_link(query: str):
+    """Scrap youtube content to search for the first link"""
+    fields = urlencode({'search_query': query})
+    url = f'https://www.youtube.com/results?{fields}'
+    driver.get(url)
+    content = driver.page_source.encode('utf-8').strip()
+    soup = BeautifulSoup(content, 'html.parser')
+    first_link = soup.find('a', id='thumbnail')['href']
+    return f'https://youtube.com{first_link}'
+
+def search_youtube_link(query: str):
+    """Search for the id using google api and return the link"""
+    results = youtube.list(q=query, part='id,snippet', maxResults=5).execute()
+    for result in results.get('items', []):
+        id_object = result['id']
+        if id_object['kind'] == 'youtube#video':
+            actual_id = id_object['videoId']
+            return f'https://youtube.com/watch?v={actual_id}'
+    return ''
+
+def get_track_info(track) -> TrackInfo:
+    """Gets the track name using its track id"""
+    artist_name = track['artists'][0]['name']
+    track_name = track['name']
+    return track_name, artist_name
+
+def get_youtube_link(track):
+    """
+    Gets the youtube link either by scrapping the results site
+    or by using the google api
+    """
+    track_info = get_track_info(track)
+    query = ' '.join(track_info)
+    try:
+        return search_youtube_link(query)
+    except Exception:
+        return scrap_youtube_link(query)
+
+def create_storage():
+    try:
+        return Storage(environ.get('SPOTIFY_DATABASE', ''))
+    except Exception as e:
+        return None
+
+def get_stored_link(track, storage: Storage):
+    if storage is None:
+        raise KeyError()
+    return storage.get_link(track['id'])
+
+def store_link(track, link: str, storage: Storage):
+    if storage is None:
+        return
+    storage.store_link(track['id'], link)
+
+def get_links(tracks: list):
+    links = []
+    storage = create_storage()
+    for track in tqdm(tracks, 'Getting youtube links'):
+        try:
+            link = get_stored_link(track, storage)
+        except KeyError:
+            tqdm.write('Link no found')
+            link = get_youtube_link(track)
+            store_link(track, link, storage)
+        links.append(link)
+    return links
 
 def main(args):
     """Main process"""
@@ -137,18 +170,14 @@ def main(args):
         if tracks is None:
             print(f'{ERROR} use --help for help')
             return
-        track_infos = [get_track_info(track) for track in tqdm(tracks)]
-        links = []
-        for info in tqdm(track_infos, 'Getting youtube links'):
-            try:
-                links.append(get_youtube_link(info))
-            except KeyError:
-                pass
+        links = get_links(tracks)
         download_youtube(links)
     except spotipy.SpotifyException as err:
         print(f'{ERROR} {err}')
         if args.traceback:
             print_exc()
+    finally:
+        driver.close()
 
 if __name__ == "__main__":
     parser = ArgumentParser(description='spotify-dl allows you to download your spotify songs')
