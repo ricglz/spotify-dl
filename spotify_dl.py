@@ -112,7 +112,7 @@ def get_playlist_tracks(playlist_id: str):
     while len(items) == 100:
         print('Getting 100 tracks more')
         total_items += items
-        items = spotify.user_playlist_tracks(user_id, playlist_id, offset=offset)['items']
+        items = spotify.user_playlist_tracks(USER_ID, playlist_id, offset=offset)['items']
         offset += 100
     total_items += items
     tracks = [item['track'] for item in tqdm(total_items, 'Getting playlist tracks')]
@@ -138,7 +138,12 @@ def main(args):
             print(f'{ERROR} use --help for help')
             return
         track_infos = [get_track_info(track) for track in tqdm(tracks)]
-        links = [get_youtube_link(info) for info in tqdm(track_infos, 'Getting youtube links')]
+        links = []
+        for info in tqdm(track_infos, 'Getting youtube links'):
+            try:
+                links.append(get_youtube_link(info))
+            except KeyError:
+                pass
         download_youtube(links)
     except spotipy.SpotifyException as err:
         print(f'{ERROR} {err}')
