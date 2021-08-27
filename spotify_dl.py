@@ -7,7 +7,7 @@ Downloads music from spotify using youtube as an intermidiate
 
 from argparse import ArgumentParser
 from os import environ
-from subprocess import run, Popen, call
+from subprocess import Popen, call
 from traceback import print_exc
 from typing import Tuple
 from urllib.parse import urlencode
@@ -20,7 +20,6 @@ from tqdm import tqdm
 from webdriver_manager.firefox import GeckoDriverManager
 import spotipy
 
-from song_model import SongModel
 from storage import Storage
 
 #=======================
