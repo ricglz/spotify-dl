@@ -6,10 +6,11 @@ Downloads music from spotify using youtube as an intermidiate
 #!/usr/local/bin/python3
 
 from argparse import ArgumentParser
+from concurrent.futures import ThreadPoolExecutor
 from os import environ
 from subprocess import Popen, call
 from traceback import print_exc
-from typing import Tuple
+from typing import Tuple, List
 from urllib.parse import urlencode
 
 from bs4 import BeautifulSoup
@@ -65,11 +66,10 @@ DO_SCRAP = True
 #=======================
 def write_to_file(response):
     """ONLY FOR DEBUGGING: Creates an html file with the response"""
-    txt_file = open('test.html', 'w')
-    txt_file.write(response.decode('utf-8'))
-    txt_file.close()
+    with open('test.html', 'w') as txt_file:
+        txt_file.write(response.decode('utf-8'))
 
-def get_tracks(args):
+def get_tracks(args) -> List[dict]:
     if args.track:
         return [spotify.track(args.track[0])]
     if args.playlist:
@@ -149,16 +149,19 @@ def store_link(track, link: str, storage: Storage):
         return
     storage.store_link(track['id'], link)
 
-def get_links(tracks: list):
-    links = []
+def get_link(track: dict, storage: Storage):
+    try:
+        link = get_stored_link(track, storage)
+    except KeyError:
+        link = get_youtube_link(track)
+        store_link(track, link, storage)
+    return link
+
+def get_links(tracks: List[dict]):
     storage = create_storage()
-    for track in tqdm(tracks, 'Getting youtube links'):
-        try:
-            link = get_stored_link(track, storage)
-        except KeyError:
-            link = get_youtube_link(track)
-            store_link(track, link, storage)
-        links.append(link)
+    with ThreadPoolExecutor() as executor:
+        futures = [executor.submit(get_link, track, storage) for track in tracks]
+        links = [future.result() for future in tqdm(futures, 'Getting youtube links')]
     return links
 
 def main(args):
