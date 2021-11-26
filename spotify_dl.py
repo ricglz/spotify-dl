@@ -1,9 +1,9 @@
+#!/usr/local/bin/python3
 """
 spotify_dl.py
 
 Downloads music from spotify using youtube as an intermidiate
 """
-#!/usr/local/bin/python3
 
 from argparse import ArgumentParser
 from concurrent.futures import ThreadPoolExecutor
