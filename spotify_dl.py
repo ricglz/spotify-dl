@@ -8,18 +8,20 @@ Downloads music from spotify using youtube as an intermidiate
 from argparse import ArgumentParser
 from concurrent.futures import ThreadPoolExecutor
 from os import environ
-from subprocess import Popen, call
+from subprocess import call
 from traceback import print_exc
 from typing import Tuple, List
 from urllib.parse import urlencode
 
 from bs4 import BeautifulSoup
 from googleapiclient.discovery import build
-from selenium import webdriver
 from spotipy.oauth2 import SpotifyClientCredentials
 from tqdm import tqdm
-from webdriver_manager.firefox import GeckoDriverManager
 import spotipy
+
+from selenium import webdriver
+from selenium.common.exceptions import WebDriverException
+from webdriver_manager.firefox import GeckoDriverManager
 
 from storage import Storage
 
@@ -52,7 +54,7 @@ options.headless = True
 
 try:
     driver = webdriver.Firefox(options=options)
-except Exception:
+except WebDriverException:
     driver = webdriver.Firefox(GeckoDriverManager().install(), options=options)
 
 #=======================
