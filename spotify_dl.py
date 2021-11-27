@@ -15,7 +15,7 @@ from urllib.parse import urlencode
 
 from bs4 import BeautifulSoup
 from googleapiclient.discovery import build
-from googleapiclient.errors import HttpError
+# from googleapiclient.errors import HttpError
 from spotipy.oauth2 import SpotifyClientCredentials
 from tqdm import tqdm
 import spotipy
@@ -105,6 +105,9 @@ def scrap_youtube_link(query: str):
     content = driver.page_source.encode('utf-8').strip()
     soup = BeautifulSoup(content, 'html.parser')
     first_elem = soup.find('a', id='video-title')
+    if first_elem is None:
+        tqdm.write(f'{query}: Was None')
+        return ''
     try:
         first_link = first_elem['href']
     except KeyError:
@@ -152,11 +155,12 @@ def get_link(track: dict) -> str:
 
 def get_links(tracks: List[dict]):
     with ThreadPoolExecutor() as executor:
-        links = list(tqdm(
+        pool_iterator = tqdm(
             executor.map(get_link, tracks),
             desc='Getting links',
             total=len(tracks),
-        ))
+        )
+        links = list(filter(lambda x: x != '', pool_iterator))
     return links
 
 def main(args):
