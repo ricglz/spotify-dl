@@ -50,9 +50,9 @@ USER_ID = environ.get('SPOTIFY_USER_ID', '123456789')
 #=======================
 YT_DEVELOPER_KEY = environ.get('YT_DEVELOPER_KEY', '')
 youtube = build('youtube', 'v3', developerKey=YT_DEVELOPER_KEY).search()
+
 options = webdriver.FirefoxOptions()
 options.headless = True
-
 try:
     driver = webdriver.Firefox(options=options)
 except WebDriverException:
