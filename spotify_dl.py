@@ -15,6 +15,7 @@ from urllib.parse import urlencode
 
 from bs4 import BeautifulSoup
 from googleapiclient.discovery import build
+from googleapiclient.errors import HttpError
 from spotipy.oauth2 import SpotifyClientCredentials
 from tqdm import tqdm
 import spotipy
@@ -61,7 +62,7 @@ except WebDriverException:
 #   Other constants
 #=======================
 TrackInfo = Tuple[str, str, str]
-DO_SCRAP = True
+storage = Storage(environ.get('SPOTIFY_DATABASE', ''))
 
 #=======================
 #   Actual code
@@ -100,11 +101,15 @@ def download_youtube(links: [str]):
 def scrap_youtube_link(query: str):
     """Scrap youtube content to search for the first link"""
     fields = urlencode({'search_query': query})
-    url = f'https://www.youtube.com/results?{fields}'
-    driver.get(url)
+    driver.get(f'https://www.youtube.com/results?{fields}')
     content = driver.page_source.encode('utf-8').strip()
     soup = BeautifulSoup(content, 'html.parser')
-    first_link = soup.find('a', id='thumbnail')['href']
+    first_elem = soup.find('a', id='video-title')
+    try:
+        first_link = first_elem['href']
+    except KeyError:
+        tqdm.write(f'{query}: {first_elem.attrs}')
+        return ''
     return f'https://youtube.com{first_link}'
 
 def search_youtube_link(query: str):
@@ -130,40 +135,28 @@ def get_youtube_link(track):
     """
     track_info = get_track_info(track)
     query = ' '.join(track_info)
+    # try:
+    #     return search_youtube_link(query)
+    # except HttpError:
+    #     return scrap_youtube_link(query)
+    return scrap_youtube_link(query)
+
+def get_link(track: dict) -> str:
     try:
-        return search_youtube_link(query)
-    except Exception:
-        return scrap_youtube_link(query)
-
-def create_storage():
-    try:
-        return Storage(environ.get('SPOTIFY_DATABASE', ''))
-    except Exception as e:
-        return None
-
-def get_stored_link(track, storage: Storage):
-    if storage is None:
-        raise KeyError()
-    return storage.get_link(track['id'])
-
-def store_link(track, link: str, storage: Storage):
-    if storage is None:
-        return
-    storage.store_link(track['id'], link)
-
-def get_link(track: dict, storage: Storage):
-    try:
-        link = get_stored_link(track, storage)
+        link = storage.get_link(track['id'])
     except KeyError:
         link = get_youtube_link(track)
-        store_link(track, link, storage)
+        if link != '':
+            storage.store_link(track['id'], link)
     return link
 
 def get_links(tracks: List[dict]):
-    storage = create_storage()
     with ThreadPoolExecutor() as executor:
-        futures = [executor.submit(get_link, track, storage) for track in tracks]
-        links = [future.result() for future in tqdm(futures, 'Getting youtube links')]
+        links = list(tqdm(
+            executor.map(get_link, tracks),
+            desc='Getting links',
+            total=len(tracks),
+        ))
     return links
 
 def main(args):
@@ -180,6 +173,7 @@ def main(args):
         if args.traceback:
             print_exc()
     finally:
+        print(f'{ACTION} closing driver')
         driver.close()
 
 if __name__ == "__main__":
