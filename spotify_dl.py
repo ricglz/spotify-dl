@@ -160,7 +160,7 @@ def get_links(tracks: List[dict]):
             desc='Getting links',
             total=len(tracks),
         )
-        links = list(filter(lambda x: x != '', pool_iterator))
+        links = set(filter(lambda x: x != '', pool_iterator))
     return links
 
 def main(args):
