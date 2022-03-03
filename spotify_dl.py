@@ -10,12 +10,11 @@ from concurrent.futures import ThreadPoolExecutor
 from os import environ
 from subprocess import call
 from traceback import print_exc
-from typing import Tuple, List
+from typing import Iterable, Optional, Tuple, List, TypedDict
 from urllib.parse import urlencode
 
 from bs4 import BeautifulSoup
 from googleapiclient.discovery import build
-# from googleapiclient.errors import HttpError
 from spotipy.oauth2 import SpotifyClientCredentials
 from tqdm import tqdm
 import spotipy
@@ -61,44 +60,53 @@ except WebDriverException:
 #=======================
 #   Other constants
 #=======================
-TrackInfo = Tuple[str, str, str]
 storage = Storage(environ.get('SPOTIFY_DATABASE', ''))
+
+#=======================
+#   Types
+#=======================
+TrackInfo = Tuple[str, str]
+class Artist(TypedDict):
+    '''Type for an artist'''
+    name: str
+class Track(TypedDict):
+    '''Type for a track'''
+    artists: List[Artist]
+    id: str
+    name: str
 
 #=======================
 #   Actual code
 #=======================
-def write_to_file(response):
-    """ONLY FOR DEBUGGING: Creates an html file with the response"""
-    with open('test.html', 'w') as txt_file:
-        txt_file.write(response.decode('utf-8'))
-
-def get_tracks(args) -> List[dict]:
+def get_tracks(args) -> Optional[List[Track]]:
+    '''Gets a list of tracks based if is a single track or a list of them'''
     if args.track:
-        return [spotify.track(args.track[0])]
+        track_id = args.track[0]
+        track = spotify.track(track_id)
+        return None if track is None else [track]
     if args.playlist:
         return get_playlist_tracks(args.playlist[0])
     return None
 
-def get_playlist_tracks(playlist_id: str):
+def safe_playlist_tracks(playlist_id: str, offset: int) -> List[Track]:
+    '''Safe playlist tracks'''
+    response = spotify.user_playlist_tracks(USER_ID, playlist_id, offset=offset)
+    return [] if response is None else response['items']
+
+def get_playlist_tracks(playlist_id: str) -> List[Track]:
     """Get tracks that are in a spotify playlist"""
-    items = spotify.user_playlist_tracks(USER_ID, playlist_id)['items']
-    offset = 100
+    offset = 0
     total_items = []
+    items = safe_playlist_tracks(playlist_id, offset)
     while len(items) == 100:
         print('Getting 100 tracks more')
-        total_items += items
-        items = spotify.user_playlist_tracks(USER_ID, playlist_id, offset=offset)['items']
         offset += 100
+        items = safe_playlist_tracks(playlist_id, offset)
     total_items += items
     tracks = [item['track'] for item in tqdm(total_items, 'Getting playlist tracks')]
     return tracks
 
-def download_youtube(links: [str]):
-    """Downloading the track"""
-    print(f'{ACTION} downloading song...')
-    call(['add_music'] + links)
-
-def scrap_youtube_link(query: str):
+def scrap_youtube_link(query: str) -> str:
     """Scrap youtube content to search for the first link"""
     fields = urlencode({'search_query': query})
     driver.get(f'https://www.youtube.com/results?{fields}')
@@ -125,26 +133,23 @@ def search_youtube_link(query: str):
             return f'https://youtube.com/watch?v={actual_id}'
     return ''
 
-def get_track_info(track) -> TrackInfo:
+def get_track_info(track: Track) -> TrackInfo:
     """Gets the track name using its track id"""
     artist_name = track['artists'][0]['name']
     track_name = track['name']
     return track_name, artist_name
 
-def get_youtube_link(track):
+def get_youtube_link(track: Track):
     """
     Gets the youtube link either by scrapping the results site
     or by using the google api
     """
     track_info = get_track_info(track)
     query = ' '.join(track_info)
-    # try:
-    #     return search_youtube_link(query)
-    # except HttpError:
-    #     return scrap_youtube_link(query)
     return scrap_youtube_link(query)
 
-def get_link(track: dict) -> str:
+def get_link(track: Track) -> str:
+    '''Gets the link of a track'''
     try:
         link = storage.get_link(track['id'])
     except KeyError:
@@ -153,7 +158,8 @@ def get_link(track: dict) -> str:
             storage.store_link(track['id'], link)
     return link
 
-def get_links(tracks: List[dict]):
+def get_links(tracks: List[Track]) -> Iterable[str]:
+    '''Gets the links of the tracks'''
     with ThreadPoolExecutor() as executor:
         pool_iterator = tqdm(
             executor.map(get_link, tracks),
@@ -162,6 +168,11 @@ def get_links(tracks: List[dict]):
         )
         links = set(filter(lambda x: x != '', pool_iterator))
     return links
+
+def download_youtube(links: Iterable[str]):
+    """Downloading the track"""
+    print(f'{ACTION} downloading song...')
+    call(['add_music'] + list(links))
 
 def main(args):
     """Main process"""
