@@ -117,9 +117,9 @@ def scrap_youtube_link(query: str) -> str:
         tqdm.write(f'{query}: Was None')
         return ''
     try:
-        first_link = first_elem['href']
+        first_link = first_elem['href'] # type: ignore
     except KeyError:
-        tqdm.write(f'{query}: {first_elem.attrs}')
+        tqdm.write(f'{query}: {first_elem.attrs}') # type: ignore
         return ''
     return f'https://youtube.com{first_link}'
 
