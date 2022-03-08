@@ -74,6 +74,9 @@ class Track(TypedDict):
     artists: List[Artist]
     id: str
     name: str
+class Item(TypedDict):
+    '''Type for a track'''
+    track: Track
 
 #=======================
 #   Actual code
@@ -88,7 +91,7 @@ def get_tracks(args) -> Optional[List[Track]]:
         return get_playlist_tracks(args.playlist[0])
     return None
 
-def safe_playlist_tracks(playlist_id: str, offset: int) -> List[Track]:
+def safe_playlist_tracks(playlist_id: str, offset: int) -> List[Item]:
     '''Safe playlist tracks'''
     response = spotify.user_playlist_tracks(USER_ID, playlist_id, offset=offset)
     return [] if response is None else response['items']
@@ -96,13 +99,13 @@ def safe_playlist_tracks(playlist_id: str, offset: int) -> List[Track]:
 def get_playlist_tracks(playlist_id: str) -> List[Track]:
     """Get tracks that are in a spotify playlist"""
     offset = 0
-    total_items = []
     items = safe_playlist_tracks(playlist_id, offset)
+    total_items = items.copy()
     while len(items) == 100:
         print('Getting 100 tracks more')
         offset += 100
         items = safe_playlist_tracks(playlist_id, offset)
-    total_items += items
+        total_items += items
     tracks = [item['track'] for item in tqdm(total_items, 'Getting playlist tracks')]
     return tracks
 
