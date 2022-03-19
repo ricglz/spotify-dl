@@ -11,17 +11,11 @@ from os import environ
 from subprocess import call
 from traceback import print_exc
 from typing import Iterable, Optional, Tuple, List, TypedDict
-from urllib.parse import urlencode
 
-from bs4 import BeautifulSoup
-from googleapiclient.discovery import build
 from spotipy.oauth2 import SpotifyClientCredentials
 from tqdm import tqdm
-import spotipy
-
-from selenium import webdriver
-from selenium.common.exceptions import WebDriverException
-from webdriver_manager.firefox import GeckoDriverManager
+from spotipy import Spotify, SpotifyException
+from ytmusicapi import YTMusic
 
 from storage import Storage
 
@@ -41,21 +35,13 @@ OK      = GREEN + "[+] " + DEFAULT
 #=======================
 #   Spotify application
 #=======================
-spotify = spotipy.Spotify(client_credentials_manager=SpotifyClientCredentials())
+spotify = Spotify(client_credentials_manager=SpotifyClientCredentials())
 USER_ID = environ.get('SPOTIFY_USER_ID', '123456789')
 
 #=======================
-#   Spotify application
+#   Youtube application
 #=======================
-YT_DEVELOPER_KEY = environ.get('YT_DEVELOPER_KEY', '')
-youtube = build('youtube', 'v3', developerKey=YT_DEVELOPER_KEY).search()
-
-options = webdriver.FirefoxOptions()
-options.headless = True
-try:
-    driver = webdriver.Firefox(options=options)
-except WebDriverException:
-    driver = webdriver.Firefox(GeckoDriverManager().install(), options=options)
+yt_music = YTMusic()
 
 #=======================
 #   Other constants
@@ -111,30 +97,11 @@ def get_playlist_tracks(playlist_id: str) -> List[Track]:
 
 def scrap_youtube_link(query: str) -> str:
     """Scrap youtube content to search for the first link"""
-    fields = urlencode({'search_query': query})
-    driver.get(f'https://www.youtube.com/results?{fields}')
-    content = driver.page_source.encode('utf-8').strip()
-    soup = BeautifulSoup(content, 'html.parser')
-    first_elem = soup.find('a', id='video-title')
-    if first_elem is None:
-        tqdm.write(f'{query}: Was None')
-        return ''
-    try:
-        first_link = first_elem['href'] # type: ignore
-    except KeyError:
-        tqdm.write(f'{query}: {first_elem.attrs}') # type: ignore
-        return ''
-    return f'https://youtube.com{first_link}'
-
-def search_youtube_link(query: str):
-    """Search for the id using google api and return the link"""
-    results = youtube.list(q=query, part='id,snippet', maxResults=5).execute()
-    for result in results.get('items', []):
-        id_object = result['id']
-        if id_object['kind'] == 'youtube#video':
-            actual_id = id_object['videoId']
-            return f'https://youtube.com/watch?v={actual_id}'
-    return ''
+    response = yt_music.search(query, filter='songs', limit=1)[0]
+    video_id: str = response['videoId']
+    video_link = f'http://youtube.com/watch?v={video_id}'
+    print(video_link)
+    return video_link
 
 def get_track_info(track: Track) -> TrackInfo:
     """Gets the track name using its track id"""
@@ -186,13 +153,12 @@ def main(args):
             return
         links = get_links(tracks)
         download_youtube(links)
-    except spotipy.SpotifyException as err:
+    except SpotifyException as err:
         print(f'{ERROR} {err}')
         if args.traceback:
             print_exc()
     finally:
         print(f'{ACTION} closing driver')
-        driver.close()
 
 if __name__ == "__main__":
     parser = ArgumentParser(description='spotify-dl allows you to download your spotify songs')
