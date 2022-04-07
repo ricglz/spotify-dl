@@ -100,7 +100,6 @@ def scrap_youtube_link(query: str) -> str:
     response = yt_music.search(query, filter='songs', limit=1)[0]
     video_id: str = response['videoId']
     video_link = f'http://youtube.com/watch?v={video_id}'
-    print(video_link)
     return video_link
 
 def get_track_info(track: Track) -> TrackInfo:
