@@ -10,7 +10,8 @@ from concurrent.futures import ThreadPoolExecutor
 from os import environ
 from subprocess import call
 from traceback import print_exc
-from typing import Iterable, Optional, Tuple, List, TypedDict
+from typing import IO, Iterable, Optional, Tuple, List, TypedDict
+from tempfile import TemporaryFile
 
 from spotipy.oauth2 import SpotifyClientCredentials
 from tqdm import tqdm
@@ -135,13 +136,22 @@ def get_links(tracks: List[Track]) -> Iterable[str]:
             desc='Getting links',
             total=len(tracks),
         )
-        links = set(filter(lambda x: x != '', pool_iterator))
-    return links
+    return set(filter(lambda x: x != '', pool_iterator))
 
-def download_youtube(links: Iterable[str]):
+def download_youtube(file: IO):
     """Downloading the track"""
     print(f'{ACTION} downloading song...')
-    call(['add_music'] + list(links))
+    print('actions', ['add_music', '--batch-file', file.name])
+    # call(['add_music', '--batch-file', file.name])
+
+def write_links_in_file(file: IO, links: Iterable[str]):
+    for link in tqdm(links, desc='Writing file'):
+        file.write(link.encode('utf-8'))
+
+def handle_links_in_tmp_file(links: Iterable[str]):
+    with TemporaryFile() as file:
+        write_links_in_file(file, links)
+        download_youtube(file)
 
 def main(args):
     """Main process"""
@@ -151,7 +161,7 @@ def main(args):
             print(f'{ERROR} use --help for help')
             return
         links = get_links(tracks)
-        download_youtube(links)
+        handle_links_in_tmp_file(links)
     except SpotifyException as err:
         print(f'{ERROR} {err}')
         if args.traceback:
