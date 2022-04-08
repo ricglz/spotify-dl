@@ -7,11 +7,11 @@ Downloads music from spotify using youtube as an intermidiate
 
 from argparse import ArgumentParser
 from concurrent.futures import ThreadPoolExecutor
-from os import environ
-from subprocess import call
+from os import environ, remove, path
+from subprocess import run
 from traceback import print_exc
-from typing import IO, Iterable, Optional, Tuple, List, TypedDict
-from tempfile import TemporaryFile
+from typing import Iterable, Optional, TextIO, Tuple, List, TypedDict
+from io import open
 
 from spotipy.oauth2 import SpotifyClientCredentials
 from tqdm import tqdm
@@ -86,13 +86,14 @@ def safe_playlist_tracks(playlist_id: str, offset: int) -> List[Item]:
 def get_playlist_tracks(playlist_id: str) -> List[Track]:
     """Get tracks that are in a spotify playlist"""
     offset = 0
+    print('Getting items')
     items = safe_playlist_tracks(playlist_id, offset)
     total_items = items.copy()
     while len(items) == 100:
-        print('Getting 100 tracks more')
         offset += 100
         items = safe_playlist_tracks(playlist_id, offset)
         total_items += items
+    print('Finished getting items')
     tracks = [item['track'] for item in tqdm(total_items, 'Getting playlist tracks')]
     return tracks
 
@@ -138,20 +139,21 @@ def get_links(tracks: List[Track]) -> Iterable[str]:
         )
     return set(filter(lambda x: x != '', pool_iterator))
 
-def download_youtube(file: IO):
+def download_youtube(batch_filename: str):
     """Downloading the track"""
     print(f'{ACTION} downloading song...')
-    print('actions', ['add_music', '--batch-file', file.name])
-    # call(['add_music', '--batch-file', file.name])
+    run(['add_music', '--batch-file', batch_filename])
 
-def write_links_in_file(file: IO, links: Iterable[str]):
-    for link in tqdm(links, desc='Writing file'):
-        file.write(link.encode('utf-8'))
+def write_links_in_file(file: TextIO, links: Iterable[str]):
+    for link in tqdm(links, desc='Writting file'):
+        file.write(f'{link}\n')
 
 def handle_links_in_tmp_file(links: Iterable[str]):
-    with TemporaryFile() as file:
+    filename = path.expanduser("~/Music/legal/temp.txt")
+    with open(filename, 'w', encoding='utf-8') as file:
         write_links_in_file(file, links)
-        download_youtube(file)
+    download_youtube(filename)
+    remove(filename)
 
 def main(args):
     """Main process"""
