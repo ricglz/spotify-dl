@@ -1,3 +1,4 @@
 .env
 test.html
 geckodriver.log
+.cache
