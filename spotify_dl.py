@@ -99,7 +99,11 @@ def get_playlist_tracks(playlist_id: str) -> List[Track]:
 
 def scrap_youtube_link(query: str) -> str:
     """Scrap youtube content to search for the first link"""
-    response = yt_music.search(query, filter='songs', limit=1)[0]
+    try:
+        response = yt_music.search(query, filter='songs', limit=1)[0]
+    except IndexError:
+        tqdm.write(f'Could not found {query}')
+        return ''
     video_id: str = response['videoId']
     video_link = f'http://youtube.com/watch?v={video_id}'
     return video_link
@@ -155,8 +159,14 @@ def handle_links_in_tmp_file(links: Iterable[str]):
     download_youtube(filename)
     remove(filename)
 
-def main(args):
+def main():
     """Main process"""
+    parser = ArgumentParser(description='spotify-dl allows you to download your spotify songs')
+    parser.add_argument('--verbose', action='store_true', help='verbose flag' )
+    parser.add_argument('--traceback', action='store_true', help="enable traceback")
+    parser.add_argument('--track', nargs=1, help="spotify track id")
+    parser.add_argument('--playlist', nargs=1, help="spotify track id")
+    args = parser.parse_args()
     try:
         tracks = get_tracks(args)
         if tracks is None:
@@ -168,14 +178,8 @@ def main(args):
         print(f'{ERROR} {err}')
         if args.traceback:
             print_exc()
-    finally:
-        print(f'{ACTION} closing driver')
+    except KeyboardInterrupt:
+        print("Gracefully exiting")
 
 if __name__ == "__main__":
-    parser = ArgumentParser(description='spotify-dl allows you to download your spotify songs')
-    parser.add_argument('--verbose', action='store_true', help='verbose flag' )
-    parser.add_argument('--traceback', action='store_true', help="enable traceback")
-    parser.add_argument('--track', nargs=1, help="spotify track id")
-    parser.add_argument('--playlist', nargs=1, help="spotify track id")
-
-    main(parser.parse_args())
+    main()
