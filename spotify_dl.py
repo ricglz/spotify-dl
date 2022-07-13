@@ -52,12 +52,16 @@ storage = Storage(environ.get('SPOTIFY_DATABASE', ''))
 #=======================
 #   Types
 #=======================
-TrackInfo = Tuple[str, str]
+TrackInfo = Tuple[str, str, str]
+class Album(TypedDict):
+    '''Type for an artist'''
+    name: str
 class Artist(TypedDict):
     '''Type for an artist'''
     name: str
 class Track(TypedDict):
     '''Type for a track'''
+    album: Album
     artists: List[Artist]
     id: str
     name: str
@@ -111,8 +115,9 @@ def scrap_youtube_link(query: str) -> str:
 def get_track_info(track: Track) -> TrackInfo:
     """Gets the track name using its track id"""
     artist_name = track['artists'][0]['name']
+    album_name = track['album']['name']
     track_name = track['name']
-    return track_name, artist_name
+    return track_name, artist_name, album_name
 
 def get_youtube_link(track: Track):
     """
